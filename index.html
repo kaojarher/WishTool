@@ -114,6 +114,11 @@
       border-radius: 50%; border: calc(var(--s) * .024) solid;
       border-color: #c62828 #f5f5f5 #c62828 #f5f5f5;
     }
+    .ema-body { transition: transform .2s ease; }
+    #wall-inner .ema { cursor: zoom-in; }
+    #wall-inner .ema:hover { z-index: 5; }
+    #wall-inner .ema:hover .ema-body { transform: scale(1.35); }
+    #ema-stage .ema { transition: none; cursor: zoom-out; }
     .ema.fly { transition: none; }
     .ema.fly .ema-body { filter: drop-shadow(0 calc(var(--s) * .09) calc(var(--s) * .08) rgba(0,0,0,.6)); }
     .ema.peeled { opacity: .12; }
@@ -175,7 +180,8 @@
         <h3 class="font-bold text-amber-300">③ 大螢幕上的操作</h3>
         <ul class="list-disc pl-5 space-y-1 leading-relaxed">
           <li><b>🖼 本機選圖</b>或把圖片<b>直接拖曳</b>到畫面：在大螢幕電腦上直接加入照片。</li>
-          <li><b>祈福繪馬牆</b>：每張照片會畫在一塊木製繪馬上，掛在牆上輕輕搖擺；新照片會「啪」地掛上。照片多時繪馬會自動縮小，超過畫面可用滑鼠滾輪往下捲。</li>
+          <li><b>祈福繪馬牆</b>：每張照片會畫在一塊木製繪馬上，掛在牆上輕輕搖擺；新照片會「啪」地掛上。繪馬以小尺寸掛在牆上，照片很多時會自動再縮小，超過畫面可用滑鼠滾輪往下捲。</li>
+          <li><b>點擊放大</b>：點任一塊繪馬可放大觀看照片與掛上時間；按 ←／→ 切換上一張／下一張，點擊任意處或按 Esc 關閉。</li>
           <li><b>更換背景</b>：控制列的背景選單可切換星空夜、銀河、黃昏星空、神社夜、純黑、自選顏色或自訂圖片；「🖼 背景圖」可選自己的圖片，「✨ 星星」可開關星空特效。設定會記在這個瀏覽器。</li>
           <li><b>衝場動畫</b>：每 3 分鐘自動觸發，每塊繪馬會從牆上取下，由左向右飛過畫面，再掛回牆上；也可在選單按「立即衝場」手動觸發。</li>
           <li><b>選單自動隱藏</b>：開啟後前 20 秒會顯示標題、倒數、音樂控制與 QR Code，之後自動隱藏。把滑鼠移到畫面<b>最上緣</b>即可再次顯示（離開後約 2.5 秒收起）。按鍵盤 <b>H</b> 可固定顯示或取消固定。</li>
@@ -216,6 +222,16 @@
         <button onclick="closeHelp()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition">我知道了</button>
       </div>
     </div>
+  </div>
+
+  <!-- ==================== 繪馬放大檢視 ==================== -->
+  <div id="ema-viewer" class="hidden fixed inset-0 z-[55] bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center p-4" onclick="closeViewer()">
+    <button onclick="event.stopPropagation(); closeViewer()" class="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs border border-slate-600">關閉 ✕</button>
+    <button id="ema-prev" onclick="event.stopPropagation(); stepViewer(-1)" class="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-slate-800/90 hover:bg-slate-700 text-slate-100 text-lg border border-slate-600" title="上一張（←）">◀</button>
+    <button id="ema-next" onclick="event.stopPropagation(); stepViewer(1)" class="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-slate-800/90 hover:bg-slate-700 text-slate-100 text-lg border border-slate-600" title="下一張（→）">▶</button>
+    <div id="ema-stage" class="relative"></div>
+    <p id="ema-caption" class="mt-5 text-xs text-slate-300"></p>
+    <p class="mt-1 text-[10px] text-slate-500">點擊任意處或按 Esc 關閉　←／→ 切換</p>
   </div>
 
   <!-- 背景層（可更換）與星空特效畫布 -->
@@ -471,6 +487,7 @@
       } else {
         switchMode('display');
         initAutoHide();
+        initViewer();
         startSprintCountdown();
         initSky();
         initHost();                                // 大螢幕端：等待手機連線
@@ -558,6 +575,7 @@
       ['#f0d3a0', '#dcb27a', '#c99a5c'], ['#d9a86a', '#c28b4c', '#a8733a']
     ];
     const EMA_SEALS = ['福', '願', '祈', '安', '喜', '吉'];
+    const EMA_SCALE = 0.2;          // 牆上繪馬大小（0.2＝縮小 5 倍；想調大可改成 0.3、0.5…）
     const emaEls = new Map();       // 照片 id → 牆上的繪馬元素
     let wallFirstRender = true;
 
@@ -569,6 +587,7 @@
     function buildEma(item) {
       const el = document.createElement('div');
       el.className = 'ema';
+      el.dataset.id = String(item.id);
       const wd = EMA_WOODS[Math.floor(rnd(item.id, 1) * EMA_WOODS.length)];
       el.style.setProperty('--w1', wd[0]);
       el.style.setProperty('--w2', wd[1]);
@@ -581,6 +600,72 @@
         '<span class="ema-seal">' + seal + '</span></div></div></div></div>';
       el.querySelector('img').src = item.url;
       return el;
+    }
+
+    // ===== 點擊繪馬放大檢視 =====
+    let viewerId = null;
+
+    function sortedPhotos() { return photosList.slice().sort((a, b) => a.createdAt - b.createdAt); }
+
+    function openViewer(id, fromEl) {
+      const list = sortedPhotos();
+      const idx = list.findIndex(p => String(p.id) === String(id));
+      if (idx < 0) return;
+      const item = list[idx];
+      viewerId = String(item.id);
+
+      const v = document.getElementById('ema-viewer');
+      const stage = document.getElementById('ema-stage');
+      stage.innerHTML = '';
+      const size = Math.max(160, Math.min(window.innerWidth * 0.82, window.innerHeight * 0.74, 900));
+      const el = buildEma(item);
+      setEmaSize(el, size);
+      stage.style.width = size + 'px';
+      stage.style.height = (size * 0.95) + 'px';
+      stage.style.marginTop = (size * 0.1) + 'px';       // 留位置給上方的繩圈
+      stage.appendChild(el);
+
+      document.getElementById('ema-caption').textContent =
+        `第 ${idx + 1} / ${list.length} 張　·　掛上時間 ${new Date(item.createdAt).toLocaleString()}`;
+      const multi = list.length > 1;
+      document.getElementById('ema-prev').classList.toggle('hidden', !multi);
+      document.getElementById('ema-next').classList.toggle('hidden', !multi);
+      v.classList.remove('hidden');
+
+      if (fromEl && el.animate) {                        // 從被點的位置放大飛出
+        const r = fromEl.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+        const dx = r.left + r.width / 2 - (sr.left + sr.width / 2);
+        const dy = r.top + r.height / 2 - (sr.top + sr.height / 2);
+        el.animate([
+          { transform: `translate(${dx}px, ${dy}px) scale(${Math.max(0.05, r.width / size)})`, opacity: 0.6 },
+          { transform: 'translate(0, 0) scale(1)', opacity: 1 }
+        ], { duration: 380, easing: 'cubic-bezier(.2,.9,.3,1)' });
+      }
+    }
+    function closeViewer() {
+      viewerId = null;
+      const v = document.getElementById('ema-viewer');
+      if (v) v.classList.add('hidden');
+      const stage = document.getElementById('ema-stage');
+      if (stage) stage.innerHTML = '';
+    }
+    function viewerOpen() { return viewerId !== null; }
+    function stepViewer(d) {
+      const list = sortedPhotos();
+      if (list.length < 2 || viewerId === null) return;
+      const idx = list.findIndex(p => String(p.id) === viewerId);
+      openViewer(list[(idx + d + list.length) % list.length].id, null);
+    }
+    function initViewer() {
+      document.getElementById('wall-inner').addEventListener('click', e => {
+        const el = e.target.closest('.ema');
+        if (el) openViewer(el.dataset.id, el);
+      });
+      document.addEventListener('keydown', e => {
+        if (!viewerOpen()) return;
+        if (e.key === 'ArrowLeft') stepViewer(-1);
+        else if (e.key === 'ArrowRight') stepViewer(1);
+      });
     }
 
     function setEmaSize(el, size) {
@@ -606,8 +691,8 @@
       if (N === 0) { inner.style.height = H + 'px'; return; }
 
       // 找出能全部放進畫面的最大格子；放不下就改為固定最小尺寸並可往下捲動
-      const pad = 28, MIN = 96;
-      const maxSize = Math.min(W, H) * 0.36;
+      const pad = 28, MIN = 52;                          // MIN：每格最小邊長，放不下時改為可捲動
+      const maxSize = Math.min(W, H) * 0.36 * EMA_SCALE;   // 牆上繪馬尺寸上限
       let best = { cols: 1, rows: N, cell: 0 };
       for (let cols = 1; cols <= N; cols++) {
         const rows = Math.ceil(N / cols);
@@ -654,6 +739,7 @@
 
     function updateGalleryUI() {
       document.getElementById('photo-count').innerText = photosList.length;
+      if (viewerOpen() && !photosList.some(p => String(p.id) === viewerId)) closeViewer();   // 照片被清除時關閉檢視
       layoutWall();
     }
 
@@ -1362,7 +1448,11 @@ function updateAudioEnergy() {
       try { localStorage.setItem('pw-help-seen', '1'); } catch (e) {}
       if (document.body.classList.contains('autohide')) { showUI(); scheduleHideUI(8000); }
     }
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      if (typeof viewerOpen === 'function' && viewerOpen()) { closeViewer(); return; }
+      closeHelp();
+    });
 
     // ===== P2P 直連（WebRTC / PeerJS）=====
     let peer = null, remoteConn = null, hostId = null, isRemote = false, reconnectTimer = null;
